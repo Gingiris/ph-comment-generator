@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PH Comment Generator | Gingiris</title>
+    <meta name="description" content="Generate professional Product Hunt maker comments in seconds. Free tool from Gingiris, based on 30x daily #1 launch experience.">
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 PH Comment Generator</h1>
+            <p class="subtitle">Generate professional Product Hunt maker comments in seconds</p>
+            <p class="credit">Based on <a href="https://github.com/Gingiris/gingiris-launch" target="_blank">30x daily #1</a> launch experience</p>
+        </header>
+
+        <main>
+            <form id="commentForm">
+                <div class="form-group">
+                    <label for="productName">Product Name *</label>
+                    <input type="text" id="productName" placeholder="e.g., AFFiNE" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="tagline">One-line Description *</label>
+                    <input type="text" id="tagline" placeholder="e.g., Open source Notion alternative" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="highlights">Key Highlights (comma separated) *</label>
+                    <input type="text" id="highlights" placeholder="e.g., Local-first, AI native, Open source">
+                </div>
+
+                <div class="form-group">
+                    <label for="audience">Target Audience</label>
+                    <input type="text" id="audience" placeholder="e.g., Developers, Knowledge workers">
+                </div>
+
+                <div class="form-group">
+                    <label for="story">Your Story (optional)</label>
+                    <textarea id="story" rows="2" placeholder="e.g., We built this because we were frustrated with..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="tone">Tone</label>
+                    <select id="tone">
+                        <option value="friendly">Friendly & Warm</option>
+                        <option value="professional">Professional</option>
+                        <option value="excited">Excited & Energetic</option>
+                        <option value="humble">Humble & Grateful</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="btn-generate">✨ Generate Comments</button>
+            </form>
+
+            <div id="results" class="results hidden">
+                <h2>Generated Comments</h2>
+                
+                <div class="comment-card" id="comment1">
+                    <div class="comment-header">
+                        <span class="comment-label">Version 1 - Story-driven</span>
+                        <span class="char-count"></span>
+                    </div>
+                    <div class="comment-content"></div>
+                    <button class="btn-copy" onclick="copyComment(1)">📋 Copy</button>
+                </div>
+
+                <div class="comment-card" id="comment2">
+                    <div class="comment-header">
+                        <span class="comment-label">Version 2 - Feature-focused</span>
+                        <span class="char-count"></span>
+                    </div>
+                    <div class="comment-content"></div>
+                    <button class="btn-copy" onclick="copyComment(2)">📋 Copy</button>
+                </div>
+
+                <div class="comment-card" id="comment3">
+                    <div class="comment-header">
+                        <span class="comment-label">Version 3 - Concise</span>
+                        <span class="char-count"></span>
+                    </div>
+                    <div class="comment-content"></div>
+                    <button class="btn-copy" onclick="copyComment(3)">📋 Copy</button>
+                </div>
+
+                <div class="tips-box">
+                    <h3>💡 Pro Tips</h3>
+                    <ul>
+                        <li><strong>Optimal length:</strong> 300-500 characters performs best</li>
+                        <li><strong>Post timing:</strong> Within 5 minutes of launch</li>
+                        <li><strong>Engage:</strong> Reply to every comment in the first 2 hours</li>
+                        <li><strong>Be authentic:</strong> Share real story, avoid marketing speak</li>
+                    </ul>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>
+                Want the complete launch playbook? 
+                <a href="https://github.com/Gingiris/gingiris-launch" target="_blank">⭐ Star on GitHub</a> |
+                <a href="https://gingiris.com" target="_blank">Gingiris</a>
+            </p>
+            <p class="footer-note">Free tool by Gingiris • No data collected • Works offline</p>
+        </footer>
+    </div>
+
+    <div id="toast" class="toast hidden">Copied to clipboard!</div>
+
+    <script src="script.js"></script>
+</body>
+</html>
