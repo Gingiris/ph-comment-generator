@@ -1,7 +1,7 @@
-// PH Comment Generator - Gingiris
-// Based on 30x daily #1 launch experience + real winner templates
+// PH Comment Generator v3 - Gingiris
+// Based on REAL #1 Product Hunt comments (Clico, Chronicle, Vozo, Tobira)
 
-console.log('PH Comment Generator v2 loaded');
+console.log('PH Comment Generator v3 loaded - Real winner templates');
 
 // ===== URL FETCHING =====
 
@@ -10,9 +10,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const urlInput = document.getElementById('urlInput');
     
     if (fetchBtn) {
-        fetchBtn.addEventListener('click', function() {
-            fetchProductInfo();
-        });
+        fetchBtn.addEventListener('click', fetchProductInfo);
     }
     
     if (urlInput) {
@@ -51,14 +49,10 @@ async function fetchProductInfo() {
     btn.disabled = true;
 
     try {
-        let productInfo;
+        let productInfo = url.includes('github.com/') 
+            ? await fetchGitHubInfo(url) 
+            : extractFromUrl(url);
         
-        if (url.includes('github.com/')) {
-            productInfo = await fetchGitHubInfo(url);
-        } else {
-            productInfo = extractFromUrl(url);
-        }
-
         fillForm(productInfo);
         
         const form = document.getElementById('commentForm');
@@ -66,11 +60,9 @@ async function fetchProductInfo() {
             form.classList.remove('hidden');
             form.scrollIntoView({ behavior: 'smooth' });
         }
-
     } catch (error) {
         console.error('Fetch error:', error);
-        const form = document.getElementById('commentForm');
-        if (form) form.classList.remove('hidden');
+        document.getElementById('commentForm')?.classList.remove('hidden');
         alert('Could not auto-fetch. Please fill in manually.');
     } finally {
         if (btnText) btnText.classList.remove('hidden');
@@ -91,19 +83,17 @@ async function fetchGitHubInfo(url) {
     const highlights = data.topics ? data.topics.slice(0, 5).join(', ') : '';
     
     let audience = 'developers and teams';
-    if (data.topics && data.topics.some(t => ['ai', 'machine-learning', 'llm', 'gpt'].includes(t))) {
+    const topics = data.topics || [];
+    if (topics.some(t => ['ai', 'machine-learning', 'llm', 'gpt'].includes(t))) {
         audience = 'AI engineers and developers';
-    } else if (data.topics && data.topics.some(t => ['saas', 'startup', 'business'].includes(t))) {
+    } else if (topics.some(t => ['saas', 'startup', 'business'].includes(t))) {
         audience = 'startups and businesses';
-    } else if (data.topics && data.topics.some(t => ['productivity', 'notion', 'obsidian'].includes(t))) {
+    } else if (topics.some(t => ['productivity', 'notion', 'obsidian'].includes(t))) {
         audience = 'knowledge workers and creators';
     }
 
-    let name = data.name || '';
-    name = name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-
     return {
-        name: name,
+        name: (data.name || '').replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
         tagline: data.description || '',
         highlights: highlights,
         audience: audience,
@@ -113,72 +103,63 @@ async function fetchGitHubInfo(url) {
 
 function extractFromUrl(url) {
     try {
-        const urlObj = new URL(url);
-        const name = urlObj.hostname
+        const name = new URL(url).hostname
             .replace(/^www\./, '')
             .split('.')[0]
             .replace(/-/g, ' ')
             .replace(/\b\w/g, l => l.toUpperCase());
-        
-        return { name: name, tagline: '', highlights: '', audience: '', story: '' };
+        return { name, tagline: '', highlights: '', audience: '', story: '' };
     } catch (e) {
         return { name: '', tagline: '', highlights: '', audience: '', story: '' };
     }
 }
 
 function fillForm(info) {
-    const fields = ['productName', 'tagline', 'highlights', 'audience', 'story'];
-    const values = [info.name, info.tagline, info.highlights, info.audience, info.story];
-    fields.forEach((field, i) => {
+    ['productName', 'tagline', 'highlights', 'audience', 'story'].forEach((field, i) => {
         const el = document.getElementById(field);
+        const values = [info.name, info.tagline, info.highlights, info.audience, info.story];
         if (el) el.value = values[i] || '';
     });
 }
 
 function restart() {
-    ['results', 'commentForm'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.classList.add('hidden');
-    });
+    ['results', 'commentForm'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
     const urlInput = document.getElementById('urlInput');
     if (urlInput) { urlInput.value = ''; urlInput.focus(); }
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// ===== COMMENT GENERATION (Based on Real PH #1 Templates) =====
+// ===== COMMENT GENERATION - Based on REAL PH #1 Winners =====
 
 function generateComments() {
     const productName = document.getElementById('productName').value.trim();
     const tagline = document.getElementById('tagline').value.trim();
     const highlights = document.getElementById('highlights').value.trim();
-    const audience = document.getElementById('audience').value.trim() || 'everyone';
+    const audience = document.getElementById('audience').value.trim() || 'teams and professionals';
     const story = document.getElementById('story').value.trim();
-    const tone = document.getElementById('tone').value;
+    const makerName = document.getElementById('makerName')?.value.trim() || 'the team';
 
     if (!productName || !tagline) {
         alert('Please fill in Product Name and Description');
         return;
     }
 
-    const highlightList = highlights.split(',').map(h => h.trim()).filter(h => h);
+    let highlightList = highlights.split(',').map(h => h.trim()).filter(h => h);
     if (highlightList.length === 0) {
-        highlightList.push('Fast & intuitive', 'Saves hours of work', 'Free to try');
+        highlightList = ['Fast & intuitive', 'Saves hours of work', 'Free to try'];
     }
 
-    // Three templates based on real PH #1 winners
-    const comment1 = generateScratchItch(productName, tagline, highlightList, audience, story, tone);
-    const comment2 = generateFeaturePowerhouse(productName, tagline, highlightList, audience, tone);
-    const comment3 = generatePublicBuilder(productName, tagline, highlightList, audience, tone);
+    // Generate 3 templates based on real winners
+    const comment1 = generateFounderStory(productName, tagline, highlightList, audience, story, makerName);
+    const comment2 = generateProvocateur(productName, tagline, highlightList, audience, story);
+    const comment3 = generateBuilder(productName, tagline, highlightList, audience);
 
     displayComment(1, comment1);
     displayComment(2, comment2);
     displayComment(3, comment3);
 
-    const results = document.getElementById('results');
-    if (results) {
-        results.classList.remove('hidden');
-        results.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+    document.getElementById('results')?.classList.remove('hidden');
+    document.getElementById('results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function displayComment(num, text) {
@@ -190,148 +171,150 @@ function displayComment(num, text) {
     
     if (content) content.textContent = text;
     if (charCount) {
-        charCount.textContent = text.length + ' chars';
-        if (text.length >= 400 && text.length <= 800) {
-            charCount.style.color = '#10b981'; // optimal
-        } else if (text.length < 300 || text.length > 1000) {
-            charCount.style.color = '#ef4444'; // needs work
-        } else {
-            charCount.style.color = '#f59e0b'; // acceptable
-        }
+        const len = text.length;
+        charCount.textContent = len + ' chars';
+        charCount.style.color = (len >= 500 && len <= 1200) ? '#10b981' : 
+                                (len < 400 || len > 1500) ? '#ef4444' : '#f59e0b';
     }
 }
 
-// Template A: "Scratch Your Own Itch" - Origin Story Focus
-function generateScratchItch(productName, tagline, highlights, audience, story, tone) {
-    let comment = '';
+// ===== TEMPLATE 1: Founder Story (like Vozo, Clico) =====
+function generateFounderStory(productName, tagline, highlights, audience, story, makerName) {
+    let c = '';
     
-    // Hook (first 2 lines visible before "Read More")
-    comment += `Hi Hunters! 👋\n\n`;
-    comment += `I'm the maker behind ${productName}. I built this because I was tired of the broken way we handle this problem.\n\n`;
+    // Opening - personal intro
+    c += `Hi Product Hunt! 👋\n\n`;
+    c += `I'm ${makerName}, and I built **${productName}**.\n\n`;
     
-    // The Story
+    // Problem/frustration
     if (story) {
-        comment += `${story}\n\n`;
+        c += `${story}\n\n`;
     } else {
-        comment += `For months, I struggled with existing solutions. They were either too expensive, too complicated, or just didn't work for ${audience}.\n\n`;
-        comment += `So I decided to fix it myself. 🛠️\n\n`;
+        c += `We built this out of our own frustration. ${audience.charAt(0).toUpperCase() + audience.slice(1)} deserve better tools, but existing solutions were always too complicated, too expensive, or just didn't work.\n\n`;
+        c += `So we decided to fix it ourselves. 🛠️\n\n`;
     }
     
-    // The Solution
-    comment += `**${productName}** is ${tagline.toLowerCase()}.\n\n`;
-    comment += `Here's what makes it different:\n\n`;
+    // What it is
+    c += `**${productName}** is ${tagline.toLowerCase().replace(/\.$/, '')}.\n\n`;
     
-    highlights.forEach(h => {
-        comment += `✅ ${h}\n`;
-    });
-    
-    // The Ask (engagement bait)
-    comment += `\nI'm genuinely nervous and excited to hear what you think!\n\n`;
-    comment += `👉 **Quick question:** Which of these features would save you the most time?\n\n`;
-    
-    // The Deal
-    comment += `To thank the PH community, use code **HUNT20** for 20% off.\n\n`;
-    comment += `Let me know your thoughts below! 👇`;
-    
-    return comment;
-}
-
-// Template B: "Feature Powerhouse" - Utility & Speed Focus
-function generateFeaturePowerhouse(productName, tagline, highlights, audience, tone) {
-    let comment = '';
-    
-    // Hook
-    comment += `The way we do this is broken. Today, we're changing that. 🚀\n\n`;
-    
-    // Context
-    comment += `Hey everyone! Team ${productName} here.\n\n`;
-    comment += `We realized that ${audience} waste hours every week on tasks that should take minutes.\n\n`;
-    
-    // Solution
-    comment += `Meet **${productName}** — ${tagline}.\n\n`;
-    
-    // Features with visual formatting
-    comment += `Here's what's under the hood:\n\n`;
-    
-    const emojis = ['⚡', '🎨', '🔗', '🛡️', '💡'];
+    // Features with emojis (like real winners)
+    c += `Here's what makes it different:\n\n`;
+    const emojis = ['✨', '⚡', '🎨', '🔗', '💡'];
     highlights.forEach((h, i) => {
-        comment += `${emojis[i % emojis.length]} **${h}**\n`;
+        c += `${emojis[i % emojis.length]} **${h}**\n`;
     });
     
-    // Demo callout
-    comment += `\nIf you watched the demo video above, you saw it in action. What usually takes hours now takes seconds.\n\n`;
-    
-    // CTA with engagement
-    comment += `We're hanging out in the comments all day! 💬\n\n`;
-    comment += `**Challenge:** Try the free version and tell us — is it faster than your current workflow?\n\n`;
-    comment += `Let's chat! 👇`;
-    
-    return comment;
-}
-
-// Template C: "Public Builder" - Community Co-Creation Focus
-function generatePublicBuilder(productName, tagline, highlights, audience, tone) {
-    let comment = '';
-    
-    // Hook
-    comment += `It's finally here! 🎉\n\n`;
-    
-    // Gratitude
-    comment += `Hi Hunters! After months of building in public, ${productName} is ready for the world.\n\n`;
-    comment += `First, a massive shoutout to everyone who gave early feedback. We couldn't have done this without you. 🙏\n\n`;
-    
-    // The Why
-    comment += `**Why we built this:**\n\n`;
-    comment += `We believe ${audience} deserve better tools. ${tagline}.\n\n`;
-    
-    // Current state
-    comment += `Today is just Day 1. Here's what's ready:\n\n`;
-    
-    highlights.forEach(h => {
-        comment += `→ ${h}\n`;
-    });
-    
-    // Roadmap + engagement
-    comment += `\nBut we want YOU to decide what comes next.\n\n`;
-    comment += `❓ **Vote in the comments:** What feature should we build next?\n\n`;
+    // CTA
+    c += `\nWe're so excited to share this with the PH community! 🚀\n\n`;
     
     // Offer
-    comment += `Grab the exclusive PH deal: **50% off** for the first 100 users.\n\n`;
-    comment += `Drop your vote below! 👇`;
+    c += `🎁 Special for Product Hunt: Use code **HUNT20** for 20% off.\n\n`;
     
-    return comment;
+    // Engagement question (critical!)
+    c += `We'd genuinely love your feedback — what feature would you want to see next? 👇`;
+    
+    return c;
 }
 
-// Copy functionality
+// ===== TEMPLATE 2: The Provocateur (like Tobira.ai) =====
+function generateProvocateur(productName, tagline, highlights, audience, story) {
+    let c = '';
+    
+    // Bold opening statement
+    c += `The way we do this is completely broken. 🔥\n\n`;
+    c += `Hey PH! 👋\n\n`;
+    
+    // The problem (provocative)
+    if (story) {
+        c += `${story}\n\n`;
+    } else {
+        c += `I tried existing solutions. They were slow. They were clunky. They didn't actually solve the problem — they just moved it around.\n\n`;
+        c += `That's when I realized: ${audience} need something fundamentally different.\n\n`;
+    }
+    
+    // The solution
+    c += `**So I built ${productName}.**\n\n`;
+    c += `${tagline}.\n\n`;
+    
+    // How it works (bullet points like Tobira)
+    c += `**How it works:**\n\n`;
+    highlights.forEach(h => {
+        c += `→ ${h}\n`;
+    });
+    
+    // Social proof / early adopters
+    c += `\n**Early adopters are already in:** founders, developers, teams who were tired of the old way.\n\n`;
+    
+    // Offer
+    c += `🎁 Grab free access at launch — use code **PHHUNT** on signup.\n\n`;
+    
+    // Specific engagement question
+    c += `What's the first thing you'd want to try? Drop it below 👇`;
+    
+    return c;
+}
+
+// ===== TEMPLATE 3: Public Builder (like open source launches) =====
+function generateBuilder(productName, tagline, highlights, audience) {
+    let c = '';
+    
+    // Celebration
+    c += `It's finally here! 🎉\n\n`;
+    
+    // Gratitude
+    c += `Hey PH! After months of building, **${productName}** is ready for the world.\n\n`;
+    c += `First, massive thanks to everyone who gave early feedback. We couldn't have done this without you. 🙏\n\n`;
+    
+    // The why
+    c += `**Why we built this:**\n\n`;
+    c += `We believe ${audience} deserve better tools. ${tagline}.\n\n`;
+    
+    // What's ready
+    c += `**Here's what's ready today:**\n\n`;
+    highlights.forEach(h => {
+        c += `✅ ${h}\n`;
+    });
+    
+    // Roadmap + community
+    c += `\nToday is just Day 1. We're shipping updates every single day.\n\n`;
+    c += `But we want **YOU** to decide what comes next.\n\n`;
+    
+    // Vote + engagement
+    c += `❓ **Vote in the comments:** What feature should we build next?\n\n`;
+    
+    // Offer
+    c += `🎁 Exclusive PH deal: **50% off** for the first 100 users.\n\n`;
+    
+    // Final CTA
+    c += `We're hanging out in the comments all day — let's chat! 💬`;
+    
+    return c;
+}
+
+// ===== Copy to Clipboard =====
 function copyComment(num) {
     const card = document.getElementById('comment' + num);
     if (!card) return;
     
-    const content = card.querySelector('.comment-content');
-    if (!content) return;
+    const text = card.querySelector('.comment-content')?.textContent;
+    if (!text) return;
     
-    const text = content.textContent;
-    
-    navigator.clipboard.writeText(text).then(function() {
-        const toast = document.getElementById('toast');
-        if (toast) toast.classList.remove('hidden');
-        
+    navigator.clipboard.writeText(text).then(() => {
+        document.getElementById('toast')?.classList.remove('hidden');
         const btn = card.querySelector('.btn-copy');
         if (btn) {
             btn.textContent = '✓ Copied!';
             btn.classList.add('copied');
         }
-        
-        setTimeout(function() {
-            if (toast) toast.classList.add('hidden');
+        setTimeout(() => {
+            document.getElementById('toast')?.classList.add('hidden');
             if (btn) {
                 btn.textContent = '📋 Copy';
                 btn.classList.remove('copied');
             }
         }, 2000);
-    }).catch(function(err) {
-        console.error('Copy failed:', err);
-        // Fallback
+    }).catch(err => {
+        // Fallback for older browsers
         const textarea = document.createElement('textarea');
         textarea.value = text;
         document.body.appendChild(textarea);
