@@ -1,15 +1,45 @@
 // PH Comment Generator - Gingiris
 // Based on 30x daily #1 launch experience
 
+console.log('PH Comment Generator loaded');
+
 // ===== URL FETCHING =====
 
-document.getElementById('fetchBtn').addEventListener('click', fetchProductInfo);
-document.getElementById('urlInput').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') fetchProductInfo();
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM ready');
+    
+    const fetchBtn = document.getElementById('fetchBtn');
+    const urlInput = document.getElementById('urlInput');
+    
+    if (fetchBtn) {
+        fetchBtn.addEventListener('click', function() {
+            console.log('Fetch button clicked');
+            fetchProductInfo();
+        });
+    }
+    
+    if (urlInput) {
+        urlInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                fetchProductInfo();
+            }
+        });
+    }
+    
+    const commentForm = document.getElementById('commentForm');
+    if (commentForm) {
+        commentForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            generateComments();
+        });
+    }
 });
 
 async function fetchProductInfo() {
-    const url = document.getElementById('urlInput').value.trim();
+    const urlInput = document.getElementById('urlInput');
+    const url = urlInput ? urlInput.value.trim() : '';
+    
     if (!url) {
         alert('Please enter a URL');
         return;
@@ -17,41 +47,44 @@ async function fetchProductInfo() {
 
     // Show loading state
     const btn = document.getElementById('fetchBtn');
-    btn.querySelector('.btn-text').classList.add('hidden');
-    btn.querySelector('.btn-loading').classList.remove('hidden');
+    const btnText = btn.querySelector('.btn-text');
+    const btnLoading = btn.querySelector('.btn-loading');
+    
+    if (btnText) btnText.classList.add('hidden');
+    if (btnLoading) btnLoading.classList.remove('hidden');
     btn.disabled = true;
 
     try {
         let productInfo;
         
-        if (isGitHubUrl(url)) {
+        if (url.includes('github.com/')) {
             productInfo = await fetchGitHubInfo(url);
         } else {
-            productInfo = await fetchWebsiteInfo(url);
+            productInfo = extractFromUrl(url);
         }
 
         // Fill the form
         fillForm(productInfo);
         
         // Show the form
-        document.getElementById('commentForm').classList.remove('hidden');
-        document.getElementById('commentForm').scrollIntoView({ behavior: 'smooth' });
+        const form = document.getElementById('commentForm');
+        if (form) {
+            form.classList.remove('hidden');
+            form.scrollIntoView({ behavior: 'smooth' });
+        }
 
     } catch (error) {
         console.error('Fetch error:', error);
         // Still show form with empty fields
-        document.getElementById('commentForm').classList.remove('hidden');
+        const form = document.getElementById('commentForm');
+        if (form) form.classList.remove('hidden');
         alert('Could not auto-fetch info. Please fill in manually.');
     } finally {
         // Reset button
-        btn.querySelector('.btn-text').classList.remove('hidden');
-        btn.querySelector('.btn-loading').classList.add('hidden');
+        if (btnText) btnText.classList.remove('hidden');
+        if (btnLoading) btnLoading.classList.add('hidden');
         btn.disabled = false;
     }
-}
-
-function isGitHubUrl(url) {
-    return url.includes('github.com/');
 }
 
 async function fetchGitHubInfo(url) {
@@ -68,134 +101,33 @@ async function fetchGitHubInfo(url) {
     const data = await response.json();
 
     // Extract topics as highlights
-    const highlights = data.topics?.slice(0, 5).join(', ') || '';
+    const highlights = data.topics ? data.topics.slice(0, 5).join(', ') : '';
     
     // Try to determine audience from topics/language
     let audience = 'Developers';
-    if (data.topics?.some(t => ['ai', 'machine-learning', 'llm'].includes(t))) {
+    if (data.topics && data.topics.some(t => ['ai', 'machine-learning', 'llm'].includes(t))) {
         audience = 'AI/ML engineers, Developers';
-    } else if (data.topics?.some(t => ['saas', 'startup'].includes(t))) {
+    } else if (data.topics && data.topics.some(t => ['saas', 'startup'].includes(t))) {
         audience = 'Startups, Tech companies';
     }
 
-    return {
-        name: data.name?.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || '',
-        tagline: data.description || '',
-        highlights: highlights,
-        audience: audience,
-        story: '',
-        stars: data.stargazers_count,
-        language: data.language
-    };
-}
-
-async function fetchWebsiteInfo(url) {
-    // Use a CORS proxy to fetch the page
-    // Options: allorigins.win, cors-anywhere, or jina.ai reader
-    
-    try {
-        // Try jina.ai reader first (better extraction)
-        const jinaUrl = `https://r.jina.ai/${url}`;
-        const response = await fetch(jinaUrl, {
-            headers: { 'Accept': 'text/plain' }
-        });
-        
-        if (response.ok) {
-            const text = await response.text();
-            return parseJinaResponse(text, url);
-        }
-    } catch (e) {
-        console.log('Jina fetch failed, trying fallback');
-    }
-
-    // Fallback: try to extract from URL and basic fetch
-    try {
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-        const response = await fetch(proxyUrl);
-        const data = await response.json();
-        
-        if (data.contents) {
-            return parseHtmlContent(data.contents, url);
-        }
-    } catch (e) {
-        console.log('Proxy fetch failed');
-    }
-
-    // Final fallback: extract from URL
-    return extractFromUrl(url);
-}
-
-function parseJinaResponse(text, url) {
-    const lines = text.split('\n').filter(l => l.trim());
-    
-    // First non-empty line is usually the title
-    const name = lines[0]?.replace(/^#\s*/, '').trim() || extractFromUrl(url).name;
-    
-    // Look for description-like content
-    let tagline = '';
-    for (let i = 1; i < Math.min(lines.length, 10); i++) {
-        const line = lines[i].trim();
-        if (line.length > 20 && line.length < 200 && !line.startsWith('#')) {
-            tagline = line;
-            break;
-        }
-    }
-
-    // Look for features/highlights
-    const highlights = [];
-    const featurePatterns = [/^[-•*]\s*(.+)/, /^✓\s*(.+)/, /^✅\s*(.+)/];
-    for (const line of lines.slice(1, 30)) {
-        for (const pattern of featurePatterns) {
-            const match = line.match(pattern);
-            if (match && match[1].length < 50) {
-                highlights.push(match[1].trim());
-                if (highlights.length >= 5) break;
-            }
-        }
-        if (highlights.length >= 5) break;
-    }
+    // Format name
+    let name = data.name || '';
+    name = name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 
     return {
         name: name,
-        tagline: tagline || 'A powerful tool for modern teams',
-        highlights: highlights.join(', ') || 'Fast, Reliable, Easy to use',
-        audience: 'Teams, Professionals',
-        story: ''
-    };
-}
-
-function parseHtmlContent(html, url) {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-
-    // Get title
-    let name = doc.querySelector('title')?.textContent?.split(/[-|–]/)[0]?.trim() || '';
-    
-    // Get meta description
-    let tagline = doc.querySelector('meta[name="description"]')?.content || 
-                  doc.querySelector('meta[property="og:description"]')?.content || '';
-
-    // Try to find features
-    const highlights = [];
-    doc.querySelectorAll('li, .feature, [class*="feature"]').forEach(el => {
-        const text = el.textContent?.trim();
-        if (text && text.length > 5 && text.length < 50 && highlights.length < 5) {
-            highlights.push(text);
-        }
-    });
-
-    return {
-        name: name || extractFromUrl(url).name,
-        tagline: tagline.slice(0, 150),
-        highlights: highlights.join(', ') || 'Fast, Reliable, Easy to use',
-        audience: 'Teams, Professionals',
+        tagline: data.description || '',
+        highlights: highlights,
+        audience: audience,
         story: ''
     };
 }
 
 function extractFromUrl(url) {
     try {
-        const hostname = new URL(url).hostname;
+        const urlObj = new URL(url);
+        const hostname = urlObj.hostname;
         const name = hostname
             .replace(/^www\./, '')
             .split('.')[0]
@@ -209,33 +141,36 @@ function extractFromUrl(url) {
             audience: '',
             story: ''
         };
-    } catch {
+    } catch (e) {
         return { name: '', tagline: '', highlights: '', audience: '', story: '' };
     }
 }
 
 function fillForm(info) {
-    document.getElementById('productName').value = info.name || '';
-    document.getElementById('tagline').value = info.tagline || '';
-    document.getElementById('highlights').value = info.highlights || '';
-    document.getElementById('audience').value = info.audience || '';
-    document.getElementById('story').value = info.story || '';
+    const fields = ['productName', 'tagline', 'highlights', 'audience', 'story'];
+    const values = [info.name, info.tagline, info.highlights, info.audience, info.story];
+    
+    fields.forEach((field, i) => {
+        const el = document.getElementById(field);
+        if (el) el.value = values[i] || '';
+    });
 }
 
 function restart() {
-    document.getElementById('results').classList.add('hidden');
-    document.getElementById('commentForm').classList.add('hidden');
-    document.getElementById('urlInput').value = '';
-    document.getElementById('urlInput').focus();
+    const results = document.getElementById('results');
+    const form = document.getElementById('commentForm');
+    const urlInput = document.getElementById('urlInput');
+    
+    if (results) results.classList.add('hidden');
+    if (form) form.classList.add('hidden');
+    if (urlInput) {
+        urlInput.value = '';
+        urlInput.focus();
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // ===== COMMENT GENERATION =====
-
-document.getElementById('commentForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    generateComments();
-});
 
 function generateComments() {
     const productName = document.getElementById('productName').value.trim();
@@ -245,7 +180,15 @@ function generateComments() {
     const story = document.getElementById('story').value.trim();
     const tone = document.getElementById('tone').value;
 
+    if (!productName || !tagline) {
+        alert('Please fill in Product Name and Description');
+        return;
+    }
+
     const highlightList = highlights.split(',').map(h => h.trim()).filter(h => h);
+    if (highlightList.length === 0) {
+        highlightList.push('Innovative', 'Easy to use', 'Powerful');
+    }
 
     const comment1 = generateStoryDriven(productName, tagline, highlightList, audience, story, tone);
     const comment2 = generateFeatureFocused(productName, tagline, highlightList, audience, tone);
@@ -255,22 +198,31 @@ function generateComments() {
     displayComment(2, comment2);
     displayComment(3, comment3);
 
-    document.getElementById('results').classList.remove('hidden');
-    document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const results = document.getElementById('results');
+    if (results) {
+        results.classList.remove('hidden');
+        results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
 }
 
 function displayComment(num, text) {
-    const card = document.getElementById(`comment${num}`);
-    card.querySelector('.comment-content').textContent = text;
-    card.querySelector('.char-count').textContent = `${text.length} chars`;
+    const card = document.getElementById('comment' + num);
+    if (!card) return;
     
+    const content = card.querySelector('.comment-content');
     const charCount = card.querySelector('.char-count');
-    if (text.length >= 300 && text.length <= 500) {
-        charCount.style.color = '#10b981';
-    } else if (text.length < 200 || text.length > 600) {
-        charCount.style.color = '#ef4444';
-    } else {
-        charCount.style.color = '#f59e0b';
+    
+    if (content) content.textContent = text;
+    if (charCount) {
+        charCount.textContent = text.length + ' chars';
+        
+        if (text.length >= 300 && text.length <= 500) {
+            charCount.style.color = '#10b981';
+        } else if (text.length < 200 || text.length > 600) {
+            charCount.style.color = '#ef4444';
+        } else {
+            charCount.style.color = '#f59e0b';
+        }
     }
 }
 
@@ -312,17 +264,17 @@ function generateStoryDriven(productName, tagline, highlights, audience, story, 
     const thanks = getThanks(tone);
     
     let comment = greeting + "\n\n";
-    comment += `I'm the maker of ${productName} — ${tagline}.\n\n`;
+    comment += "I'm the maker of " + productName + " — " + tagline + ".\n\n";
     
     if (story) {
-        comment += `${story}\n\n`;
+        comment += story + "\n\n";
     } else {
-        comment += `We built this because we saw ${audience} struggling with existing solutions. There had to be a better way.\n\n`;
+        comment += "We built this because we saw " + audience + " struggling with existing solutions. There had to be a better way.\n\n";
     }
     
     comment += "What makes us different:\n";
-    highlights.forEach((h, i) => {
-        comment += `${i + 1}. ${h}\n`;
+    highlights.forEach(function(h, i) {
+        comment += (i + 1) + ". " + h + "\n";
     });
     
     comment += "\n" + thanks;
@@ -334,11 +286,11 @@ function generateFeatureFocused(productName, tagline, highlights, audience, tone
     const cta = getCTA(tone);
     
     let comment = greeting + "\n\n";
-    comment += `Introducing ${productName} — ${tagline}.\n\n`;
-    comment += `Built for ${audience}, here's what you get:\n\n`;
+    comment += "Introducing " + productName + " — " + tagline + ".\n\n";
+    comment += "Built for " + audience + ", here's what you get:\n\n";
     
-    highlights.forEach(h => {
-        comment += `✅ ${h}\n`;
+    highlights.forEach(function(h) {
+        comment += "✅ " + h + "\n";
     });
     
     comment += "\n" + cta;
@@ -350,29 +302,39 @@ function generateConcise(productName, tagline, highlights, tone) {
     const thanks = getThanks(tone);
     
     let comment = greeting + "\n\n";
-    comment += `${productName}: ${tagline}.\n\n`;
+    comment += productName + ": " + tagline + ".\n\n";
     comment += "Key highlights: " + highlights.join(" • ") + "\n\n";
     comment += thanks;
     return comment;
 }
 
 function copyComment(num) {
-    const text = document.querySelector(`#comment${num} .comment-content`).textContent;
+    const card = document.getElementById('comment' + num);
+    if (!card) return;
     
-    navigator.clipboard.writeText(text).then(() => {
+    const content = card.querySelector('.comment-content');
+    if (!content) return;
+    
+    const text = content.textContent;
+    
+    navigator.clipboard.writeText(text).then(function() {
         const toast = document.getElementById('toast');
-        toast.classList.remove('hidden');
+        if (toast) toast.classList.remove('hidden');
         
-        const btn = document.querySelector(`#comment${num} .btn-copy`);
-        btn.textContent = '✓ Copied!';
-        btn.classList.add('copied');
+        const btn = card.querySelector('.btn-copy');
+        if (btn) {
+            btn.textContent = '✓ Copied!';
+            btn.classList.add('copied');
+        }
         
-        setTimeout(() => {
-            toast.classList.add('hidden');
-            btn.textContent = '📋 Copy';
-            btn.classList.remove('copied');
+        setTimeout(function() {
+            if (toast) toast.classList.add('hidden');
+            if (btn) {
+                btn.textContent = '📋 Copy';
+                btn.classList.remove('copied');
+            }
         }, 2000);
-    }).catch(err => {
+    }).catch(function(err) {
         console.error('Failed to copy:', err);
         alert('Failed to copy. Please select and copy manually.');
     });
