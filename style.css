@@ -399,3 +399,42 @@ footer a:hover {
         gap: 0.5rem;
     }
 }
+
+/* SEO Content */
+.seo-content {
+    margin-top: 3rem;
+    padding: 2rem;
+    background: var(--card-bg);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+}
+
+.seo-content h2 {
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+    color: var(--primary);
+}
+
+.seo-content h3 {
+    font-size: 1.125rem;
+    margin: 1.5rem 0 0.75rem;
+}
+
+.seo-content p {
+    color: var(--text-light);
+    margin-bottom: 1rem;
+}
+
+.seo-content ul {
+    list-style: none;
+    margin-left: 0;
+}
+
+.seo-content li {
+    margin-bottom: 0.5rem;
+    color: var(--text-light);
+}
+
+.seo-content strong {
+    color: var(--text);
+}
