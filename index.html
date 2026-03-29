@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PH Comment Generator | Gingiris</title>
-    <meta name="description" content="Generate professional Product Hunt maker comments in seconds. Free tool from Gingiris, based on 30x daily #1 launch experience.">
+    <meta name="description" content="Generate professional Product Hunt maker comments in seconds. Just paste your URL. Free tool from Gingiris.">
     <link rel="stylesheet" href="style.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
 </head>
@@ -12,12 +12,32 @@
     <div class="container">
         <header>
             <h1>🚀 PH Comment Generator</h1>
-            <p class="subtitle">Generate professional Product Hunt maker comments in seconds</p>
+            <p class="subtitle">Paste your URL → Get professional maker comments</p>
             <p class="credit">Based on <a href="https://github.com/Gingiris/gingiris-launch" target="_blank">30x daily #1</a> launch experience</p>
         </header>
 
         <main>
-            <form id="commentForm">
+            <!-- Step 1: URL Input -->
+            <div id="step1" class="step">
+                <div class="url-input-section">
+                    <label for="urlInput">🔗 Paste your product URL or GitHub repo</label>
+                    <div class="url-input-wrapper">
+                        <input type="url" id="urlInput" placeholder="https://github.com/your/repo or https://yourproduct.com" required>
+                        <button type="button" id="fetchBtn" class="btn-fetch">
+                            <span class="btn-text">Fetch Info</span>
+                            <span class="btn-loading hidden">⏳</span>
+                        </button>
+                    </div>
+                    <p class="url-hint">Supports: GitHub repos, Product websites, Landing pages</p>
+                </div>
+            </div>
+
+            <!-- Step 2: Review & Edit (auto-filled) -->
+            <form id="commentForm" class="hidden">
+                <div class="auto-filled-notice">
+                    ✨ Auto-filled from your URL. Review and edit if needed:
+                </div>
+
                 <div class="form-group">
                     <label for="productName">Product Name *</label>
                     <input type="text" id="productName" placeholder="e.g., AFFiNE" required>
@@ -56,6 +76,7 @@
                 <button type="submit" class="btn-generate">✨ Generate Comments</button>
             </form>
 
+            <!-- Results -->
             <div id="results" class="results hidden">
                 <h2>Generated Comments</h2>
                 
@@ -95,6 +116,8 @@
                         <li><strong>Be authentic:</strong> Share real story, avoid marketing speak</li>
                     </ul>
                 </div>
+
+                <button class="btn-restart" onclick="restart()">🔄 Generate for another product</button>
             </div>
         </main>
 

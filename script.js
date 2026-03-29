@@ -1,13 +1,243 @@
 // PH Comment Generator - Gingiris
 // Based on 30x daily #1 launch experience
 
+// ===== URL FETCHING =====
+
+document.getElementById('fetchBtn').addEventListener('click', fetchProductInfo);
+document.getElementById('urlInput').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') fetchProductInfo();
+});
+
+async function fetchProductInfo() {
+    const url = document.getElementById('urlInput').value.trim();
+    if (!url) {
+        alert('Please enter a URL');
+        return;
+    }
+
+    // Show loading state
+    const btn = document.getElementById('fetchBtn');
+    btn.querySelector('.btn-text').classList.add('hidden');
+    btn.querySelector('.btn-loading').classList.remove('hidden');
+    btn.disabled = true;
+
+    try {
+        let productInfo;
+        
+        if (isGitHubUrl(url)) {
+            productInfo = await fetchGitHubInfo(url);
+        } else {
+            productInfo = await fetchWebsiteInfo(url);
+        }
+
+        // Fill the form
+        fillForm(productInfo);
+        
+        // Show the form
+        document.getElementById('commentForm').classList.remove('hidden');
+        document.getElementById('commentForm').scrollIntoView({ behavior: 'smooth' });
+
+    } catch (error) {
+        console.error('Fetch error:', error);
+        // Still show form with empty fields
+        document.getElementById('commentForm').classList.remove('hidden');
+        alert('Could not auto-fetch info. Please fill in manually.');
+    } finally {
+        // Reset button
+        btn.querySelector('.btn-text').classList.remove('hidden');
+        btn.querySelector('.btn-loading').classList.add('hidden');
+        btn.disabled = false;
+    }
+}
+
+function isGitHubUrl(url) {
+    return url.includes('github.com/');
+}
+
+async function fetchGitHubInfo(url) {
+    // Extract owner/repo from URL
+    const match = url.match(/github\.com\/([^\/]+)\/([^\/\?#]+)/);
+    if (!match) throw new Error('Invalid GitHub URL');
+
+    const [, owner, repo] = match;
+    const apiUrl = `https://api.github.com/repos/${owner}/${repo}`;
+
+    const response = await fetch(apiUrl);
+    if (!response.ok) throw new Error('GitHub API error');
+
+    const data = await response.json();
+
+    // Extract topics as highlights
+    const highlights = data.topics?.slice(0, 5).join(', ') || '';
+    
+    // Try to determine audience from topics/language
+    let audience = 'Developers';
+    if (data.topics?.some(t => ['ai', 'machine-learning', 'llm'].includes(t))) {
+        audience = 'AI/ML engineers, Developers';
+    } else if (data.topics?.some(t => ['saas', 'startup'].includes(t))) {
+        audience = 'Startups, Tech companies';
+    }
+
+    return {
+        name: data.name?.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || '',
+        tagline: data.description || '',
+        highlights: highlights,
+        audience: audience,
+        story: '',
+        stars: data.stargazers_count,
+        language: data.language
+    };
+}
+
+async function fetchWebsiteInfo(url) {
+    // Use a CORS proxy to fetch the page
+    // Options: allorigins.win, cors-anywhere, or jina.ai reader
+    
+    try {
+        // Try jina.ai reader first (better extraction)
+        const jinaUrl = `https://r.jina.ai/${url}`;
+        const response = await fetch(jinaUrl, {
+            headers: { 'Accept': 'text/plain' }
+        });
+        
+        if (response.ok) {
+            const text = await response.text();
+            return parseJinaResponse(text, url);
+        }
+    } catch (e) {
+        console.log('Jina fetch failed, trying fallback');
+    }
+
+    // Fallback: try to extract from URL and basic fetch
+    try {
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+        const response = await fetch(proxyUrl);
+        const data = await response.json();
+        
+        if (data.contents) {
+            return parseHtmlContent(data.contents, url);
+        }
+    } catch (e) {
+        console.log('Proxy fetch failed');
+    }
+
+    // Final fallback: extract from URL
+    return extractFromUrl(url);
+}
+
+function parseJinaResponse(text, url) {
+    const lines = text.split('\n').filter(l => l.trim());
+    
+    // First non-empty line is usually the title
+    const name = lines[0]?.replace(/^#\s*/, '').trim() || extractFromUrl(url).name;
+    
+    // Look for description-like content
+    let tagline = '';
+    for (let i = 1; i < Math.min(lines.length, 10); i++) {
+        const line = lines[i].trim();
+        if (line.length > 20 && line.length < 200 && !line.startsWith('#')) {
+            tagline = line;
+            break;
+        }
+    }
+
+    // Look for features/highlights
+    const highlights = [];
+    const featurePatterns = [/^[-•*]\s*(.+)/, /^✓\s*(.+)/, /^✅\s*(.+)/];
+    for (const line of lines.slice(1, 30)) {
+        for (const pattern of featurePatterns) {
+            const match = line.match(pattern);
+            if (match && match[1].length < 50) {
+                highlights.push(match[1].trim());
+                if (highlights.length >= 5) break;
+            }
+        }
+        if (highlights.length >= 5) break;
+    }
+
+    return {
+        name: name,
+        tagline: tagline || 'A powerful tool for modern teams',
+        highlights: highlights.join(', ') || 'Fast, Reliable, Easy to use',
+        audience: 'Teams, Professionals',
+        story: ''
+    };
+}
+
+function parseHtmlContent(html, url) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+
+    // Get title
+    let name = doc.querySelector('title')?.textContent?.split(/[-|–]/)[0]?.trim() || '';
+    
+    // Get meta description
+    let tagline = doc.querySelector('meta[name="description"]')?.content || 
+                  doc.querySelector('meta[property="og:description"]')?.content || '';
+
+    // Try to find features
+    const highlights = [];
+    doc.querySelectorAll('li, .feature, [class*="feature"]').forEach(el => {
+        const text = el.textContent?.trim();
+        if (text && text.length > 5 && text.length < 50 && highlights.length < 5) {
+            highlights.push(text);
+        }
+    });
+
+    return {
+        name: name || extractFromUrl(url).name,
+        tagline: tagline.slice(0, 150),
+        highlights: highlights.join(', ') || 'Fast, Reliable, Easy to use',
+        audience: 'Teams, Professionals',
+        story: ''
+    };
+}
+
+function extractFromUrl(url) {
+    try {
+        const hostname = new URL(url).hostname;
+        const name = hostname
+            .replace(/^www\./, '')
+            .split('.')[0]
+            .replace(/-/g, ' ')
+            .replace(/\b\w/g, l => l.toUpperCase());
+        
+        return {
+            name: name,
+            tagline: '',
+            highlights: '',
+            audience: '',
+            story: ''
+        };
+    } catch {
+        return { name: '', tagline: '', highlights: '', audience: '', story: '' };
+    }
+}
+
+function fillForm(info) {
+    document.getElementById('productName').value = info.name || '';
+    document.getElementById('tagline').value = info.tagline || '';
+    document.getElementById('highlights').value = info.highlights || '';
+    document.getElementById('audience').value = info.audience || '';
+    document.getElementById('story').value = info.story || '';
+}
+
+function restart() {
+    document.getElementById('results').classList.add('hidden');
+    document.getElementById('commentForm').classList.add('hidden');
+    document.getElementById('urlInput').value = '';
+    document.getElementById('urlInput').focus();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ===== COMMENT GENERATION =====
+
 document.getElementById('commentForm').addEventListener('submit', function(e) {
     e.preventDefault();
     generateComments();
 });
 
 function generateComments() {
-    // Get form values
     const productName = document.getElementById('productName').value.trim();
     const tagline = document.getElementById('tagline').value.trim();
     const highlights = document.getElementById('highlights').value.trim();
@@ -15,23 +245,17 @@ function generateComments() {
     const story = document.getElementById('story').value.trim();
     const tone = document.getElementById('tone').value;
 
-    // Parse highlights
     const highlightList = highlights.split(',').map(h => h.trim()).filter(h => h);
 
-    // Generate three versions
     const comment1 = generateStoryDriven(productName, tagline, highlightList, audience, story, tone);
     const comment2 = generateFeatureFocused(productName, tagline, highlightList, audience, tone);
     const comment3 = generateConcise(productName, tagline, highlightList, tone);
 
-    // Display results
     displayComment(1, comment1);
     displayComment(2, comment2);
     displayComment(3, comment3);
 
-    // Show results section
     document.getElementById('results').classList.remove('hidden');
-    
-    // Scroll to results
     document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -40,18 +264,16 @@ function displayComment(num, text) {
     card.querySelector('.comment-content').textContent = text;
     card.querySelector('.char-count').textContent = `${text.length} chars`;
     
-    // Color code character count
     const charCount = card.querySelector('.char-count');
     if (text.length >= 300 && text.length <= 500) {
-        charCount.style.color = '#10b981'; // green - optimal
+        charCount.style.color = '#10b981';
     } else if (text.length < 200 || text.length > 600) {
-        charCount.style.color = '#ef4444'; // red - needs adjustment
+        charCount.style.color = '#ef4444';
     } else {
-        charCount.style.color = '#f59e0b'; // yellow - acceptable
+        charCount.style.color = '#f59e0b';
     }
 }
 
-// Greeting based on tone
 function getGreeting(tone) {
     const greetings = {
         friendly: ["Hey Product Hunt! 👋", "Hi PH family! 🎉", "Hello everyone! 👋"],
@@ -63,7 +285,6 @@ function getGreeting(tone) {
     return options[Math.floor(Math.random() * options.length)];
 }
 
-// Thanks based on tone
 function getThanks(tone) {
     const thanks = {
         friendly: ["Thanks for checking us out! ❤️", "Would love to hear your thoughts!", "Thanks for the support! 🙌"],
@@ -75,7 +296,6 @@ function getThanks(tone) {
     return options[Math.floor(Math.random() * options.length)];
 }
 
-// CTA based on tone
 function getCTA(tone) {
     const ctas = {
         friendly: ["Try it free and let us know what you think!", "Give it a spin - we'd love your feedback!", "Check it out and share your thoughts!"],
@@ -87,13 +307,11 @@ function getCTA(tone) {
     return options[Math.floor(Math.random() * options.length)];
 }
 
-// Version 1: Story-driven (longer, more personal)
 function generateStoryDriven(productName, tagline, highlights, audience, story, tone) {
     const greeting = getGreeting(tone);
     const thanks = getThanks(tone);
     
     let comment = greeting + "\n\n";
-    
     comment += `I'm the maker of ${productName} — ${tagline}.\n\n`;
     
     if (story) {
@@ -108,19 +326,15 @@ function generateStoryDriven(productName, tagline, highlights, audience, story, 
     });
     
     comment += "\n" + thanks;
-    
     return comment;
 }
 
-// Version 2: Feature-focused (balanced)
 function generateFeatureFocused(productName, tagline, highlights, audience, tone) {
     const greeting = getGreeting(tone);
     const cta = getCTA(tone);
     
     let comment = greeting + "\n\n";
-    
     comment += `Introducing ${productName} — ${tagline}.\n\n`;
-    
     comment += `Built for ${audience}, here's what you get:\n\n`;
     
     highlights.forEach(h => {
@@ -128,41 +342,31 @@ function generateFeatureFocused(productName, tagline, highlights, audience, tone
     });
     
     comment += "\n" + cta;
-    
     return comment;
 }
 
-// Version 3: Concise (short and punchy)
 function generateConcise(productName, tagline, highlights, tone) {
     const greeting = getGreeting(tone);
     const thanks = getThanks(tone);
     
     let comment = greeting + "\n\n";
-    
     comment += `${productName}: ${tagline}.\n\n`;
-    
     comment += "Key highlights: " + highlights.join(" • ") + "\n\n";
-    
     comment += thanks;
-    
     return comment;
 }
 
-// Copy functionality
 function copyComment(num) {
     const text = document.querySelector(`#comment${num} .comment-content`).textContent;
     
     navigator.clipboard.writeText(text).then(() => {
-        // Show toast
         const toast = document.getElementById('toast');
         toast.classList.remove('hidden');
         
-        // Change button
         const btn = document.querySelector(`#comment${num} .btn-copy`);
         btn.textContent = '✓ Copied!';
         btn.classList.add('copied');
         
-        // Reset after 2 seconds
         setTimeout(() => {
             toast.classList.add('hidden');
             btn.textContent = '📋 Copy';
@@ -173,10 +377,3 @@ function copyComment(num) {
         alert('Failed to copy. Please select and copy manually.');
     });
 }
-
-// Add some interactivity - character count preview
-document.querySelectorAll('input, textarea').forEach(input => {
-    input.addEventListener('input', () => {
-        // Could add live preview here in the future
-    });
-});
